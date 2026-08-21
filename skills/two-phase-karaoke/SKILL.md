@@ -61,10 +61,10 @@ Run the renderer only with the instrumental and the edited SRT:
 ```bash
 python3 scripts/two_phase_karaoke.py render \
   /absolute/instrumental.mp3 /absolute/output/song.draft.srt \
-  /absolute/output/song-karaoke.mp4 --lead-ms 700
+  /absolute/output/song-karaoke.mp4 --lead-ms 1000
 ```
 
-Use `--lead-ms 500` to `--lead-ms 900` when the singer needs to see each cue shortly before its vocal onset. Keep it at `0` only when subtitle time must exactly match the displayed word rather than act as a singing prompt. The option moves only the rendered visual layer; it does not alter the editable SRT timings.
+Use `--lead-ms 1000` by default when the singer needs to see each cue one second before its vocal onset. Adjust the value as needed; keep it at `0` only when subtitle time must exactly match the displayed word rather than act as a singing prompt. The option moves only the rendered visual layer; it does not alter the editable SRT timings.
 
 Use `--overwrite` only when replacing a known prior draft or video. Verify the result with `ffprobe`: it must contain H.264 video, AAC audio and the expected duration. Inspect one representative frame for readable caption placement.
 

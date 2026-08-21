@@ -379,8 +379,8 @@ def parse_arguments() -> argparse.Namespace:
     phase_two.add_argument(
         "--lead-ms",
         type=lead_milliseconds,
-        default=0,
-        help="показывать каждую строку раньше на указанное число миллисекунд",
+        default=1000,
+        help="показывать каждую строку раньше на указанное число миллисекунд (по умолчанию 1000)",
     )
     phase_two.add_argument("--overwrite", action="store_true")
 
