@@ -1,0 +1,4 @@
+interface:
+  display_name: "Two-Phase Karaoke"
+  short_description: "Текст, тайминги и караоке-видео"
+  default_prompt: "Use $two-phase-karaoke to create a karaoke video from my acapella and instrumental files."
