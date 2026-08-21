@@ -48,6 +48,16 @@ def output_file(value: str) -> Path:
     return Path(value).expanduser().resolve()
 
 
+def lead_milliseconds(value: str) -> int:
+    try:
+        milliseconds = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("Опережение должно быть целым числом миллисекунд") from error
+    if not 0 <= milliseconds <= 3000:
+        raise argparse.ArgumentTypeError("Опережение должно быть от 0 до 3000 мс")
+    return milliseconds
+
+
 def find_executable(name: str, extra_paths: tuple[str, ...] = ()) -> str | None:
     found = shutil.which(name)
     if found:
@@ -185,7 +195,9 @@ def quote_concat(path: Path) -> str:
     return str(path.resolve()).replace("'", "'\\''")
 
 
-def build_caption_layer(entries: list[tuple[float, float, str]], temp: Path, font: Path) -> Path:
+def build_caption_layer(
+    entries: list[tuple[float, float, str]], temp: Path, font: Path, lead_seconds: float = 0.0
+) -> Path:
     try:
         from PIL import Image
     except ModuleNotFoundError as error:
@@ -196,12 +208,16 @@ def build_caption_layer(entries: list[tuple[float, float, str]], temp: Path, fon
     timeline: list[tuple[Path, float]] = []
     cursor = 0.0
     for index, (start, end, text) in enumerate(entries):
-        if start > cursor:
-            timeline.append((blank, start - cursor))
+        # A small lead gives the singer time to read the upcoming line.  Shift both
+        # edges equally so neighbouring captions keep their original duration/order.
+        visual_start = max(0.0, start - lead_seconds)
+        visual_end = max(visual_start + 0.1, end - lead_seconds)
+        if visual_start > cursor:
+            timeline.append((blank, visual_start - cursor))
         image = temp / f"caption-{index:03d}.png"
         make_caption_image(image, text, font)
-        timeline.append((image, end - start))
-        cursor = end
+        timeline.append((image, visual_end - visual_start))
+        cursor = visual_end
 
     manifest = temp / "captions.ffconcat"
     manifest_lines = ["ffconcat version 1.0"]
@@ -289,7 +305,7 @@ def render(args: argparse.Namespace) -> None:
 
     # This phase never receives the vocal file: output audio comes solely from `instrumental`.
     with tempfile.TemporaryDirectory(prefix="karaoke-captions-") as directory:
-        captions = build_caption_layer(entries, Path(directory), font)
+        captions = build_caption_layer(entries, Path(directory), font, args.lead_ms / 1000)
         filter_graph = (
             "[0:a]aresample=48000,asplit=2[audio_src][wave_src];"
             "[audio_src]alimiter=limit=0.95[audio];"
@@ -360,6 +376,12 @@ def parse_arguments() -> argparse.Namespace:
     phase_two.add_argument("output", type=output_file, help="итоговый .mp4")
     phase_two.add_argument("--font", help="путь к .ttf/.otf; по умолчанию ищется системный Arial Bold")
     phase_two.add_argument("--crf", type=int, default=22, help="качество H.264: 18–28, меньше = лучше")
+    phase_two.add_argument(
+        "--lead-ms",
+        type=lead_milliseconds,
+        default=0,
+        help="показывать каждую строку раньше на указанное число миллисекунд",
+    )
     phase_two.add_argument("--overwrite", action="store_true")
 
     return parser.parse_args()
