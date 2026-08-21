@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Generated audio, video, transcripts and downloaded models
+*.mp3
+*.wav
+*.m4a
+*.mp4
+*.mov
+*.srt
+*.txt
+*.bin
