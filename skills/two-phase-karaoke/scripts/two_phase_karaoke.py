@@ -155,7 +155,7 @@ def wrap_text(draw: object, text: str, font: object, max_width: int) -> list[str
     return lines
 
 
-def make_caption_image(path: Path, text: str, font_path: Path) -> None:
+def make_caption_image(path: Path, current_text: str, next_text: str | None, font_path: Path) -> None:
     try:
         from PIL import Image, ImageDraw, ImageFont
     except ModuleNotFoundError as error:
@@ -163,31 +163,53 @@ def make_caption_image(path: Path, text: str, font_path: Path) -> None:
 
     image = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype(font_path, 62)
-    lines = wrap_text(draw, text, font, WIDTH - 210)
-    line_height = 86
-    box_height = 92 + line_height * len(lines)
-    top = 155
+    current_font = ImageFont.truetype(font_path, 56)
+    next_font = ImageFont.truetype(font_path, 38)
+    label_font = ImageFont.truetype(font_path, 22)
+
+    def draw_centered_lines(
+        lines: list[str], top: int, font: object, line_height: int, fill: tuple[int, int, int, int], stroke_width: int
+    ) -> None:
+        y = top
+        for line in lines:
+            left, _, right, _ = draw.textbbox((0, 0), line, font=font, stroke_width=stroke_width)
+            x = (WIDTH - (right - left)) // 2
+            draw.text(
+                (x, y),
+                line,
+                font=font,
+                fill=fill,
+                stroke_width=stroke_width,
+                stroke_fill=(0, 0, 0, 220),
+            )
+            y += line_height
+
+    current_lines = wrap_text(draw, current_text, current_font, WIDTH - 220)
+    current_top = 135
+    current_box_height = 74 + 72 * len(current_lines)
     draw.rounded_rectangle(
-        (70, top, WIDTH - 70, top + box_height),
+        (70, current_top, WIDTH - 70, current_top + current_box_height),
         radius=32,
         fill=(8, 15, 31, 220),
         outline=(56, 189, 248, 230),
         width=3,
     )
-    y = top + (box_height - line_height * len(lines)) // 2 - 8
-    for line in lines:
-        left, _, right, _ = draw.textbbox((0, 0), line, font=font, stroke_width=2)
-        x = (WIDTH - (right - left)) // 2
-        draw.text(
-            (x, y),
-            line,
-            font=font,
-            fill=(255, 255, 255, 255),
-            stroke_width=2,
-            stroke_fill=(0, 0, 0, 230),
+    draw.text((105, current_top + 16), "СЕЙЧАС", font=label_font, fill=(125, 211, 252, 255))
+    draw_centered_lines(current_lines, current_top + 47, current_font, 72, (255, 255, 255, 255), 2)
+
+    if next_text:
+        next_lines = wrap_text(draw, next_text, next_font, WIDTH - 220)
+        next_top = 375
+        next_box_height = 62 + 50 * len(next_lines)
+        draw.rounded_rectangle(
+            (100, next_top, WIDTH - 100, next_top + next_box_height),
+            radius=26,
+            fill=(15, 23, 42, 185),
+            outline=(100, 116, 139, 150),
+            width=2,
         )
-        y += line_height
+        draw.text((130, next_top + 14), "ДАЛЬШЕ", font=label_font, fill=(148, 163, 184, 255))
+        draw_centered_lines(next_lines, next_top + 40, next_font, 50, (226, 232, 240, 255), 1)
     image.save(path)
 
 
@@ -207,16 +229,21 @@ def build_caption_layer(
     Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0)).save(blank)
     timeline: list[tuple[Path, float]] = []
     cursor = 0.0
+    visual_starts = [max(0.0, start - lead_seconds) for start, _, _ in entries]
     for index, (start, end, text) in enumerate(entries):
-        # A small lead gives the singer time to read the upcoming line.  Shift both
-        # edges equally so neighbouring captions keep their original duration/order.
+        # Keep the current line on screen until the next cue replaces it, so the
+        # singer can read the current and following lines together even in gaps.
         visual_start = max(0.0, start - lead_seconds)
-        visual_end = max(visual_start + 0.1, end - lead_seconds)
-        if visual_start > cursor:
-            timeline.append((blank, visual_start - cursor))
+        visual_end = visual_starts[index + 1] if index + 1 < len(entries) else max(visual_start + 0.1, end - lead_seconds)
+        state_start = max(cursor, visual_start)
+        if visual_end <= state_start + 0.01:
+            continue
+        if state_start > cursor:
+            timeline.append((blank, state_start - cursor))
         image = temp / f"caption-{index:03d}.png"
-        make_caption_image(image, text, font)
-        timeline.append((image, visual_end - visual_start))
+        following_text = entries[index + 1][2] if index + 1 < len(entries) else None
+        make_caption_image(image, text, following_text, font)
+        timeline.append((image, visual_end - state_start))
         cursor = visual_end
 
     manifest = temp / "captions.ffconcat"
